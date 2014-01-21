@@ -1,0 +1,221 @@
+#!/usr/bin/ruby
+
+require "set"
+require "digest/md5"
+
+module IndexStatus
+  UNKNOWN = 0 # Unknown status
+  CHECKED = 1 # Verified file
+  MISSING = 2 # Removed file
+  ALTERED = 3 # Modified file
+  INDEXED = 4 # New file
+  RENAMED = 5 # Moved file
+  DELETED = 6 # Marked for removal from index
+end
+
+class FileData
+  attr_accessor :length, :checksum, :status, :oldLength, :oldChecksum, :oldFile
+  def initialize(*args)
+    @length, @checksum, @status = *args
+  end
+end
+
+def checksum(file)
+  #    File.open(file, 'rb') { |f| Zlib.crc32 f.read }.to_s
+  #    File.open(file, 'rb') { |f| Digest::MD5.hexdigest(f.read) }.to_s
+  puts "Calculating checksum for #{file}"
+  Digest::MD5.file(file).to_s
+end
+
+def length(file)
+  File.size(file).to_s
+end
+
+def parseIndex(file)
+  puts "Reading index..."
+  index = Hash.new
+  if File.exists? file
+    File.open(file).each do |line|
+      if !/^(.*) (\d+) ([abcdef\d]+)$/.match(line)
+        puts "Invalid line: " + line
+        exit
+      end
+      index[$1] = FileData.new($2, $3, IndexStatus::UNKNOWN)
+    end
+  end
+  puts "Index size: #{index.length}"
+  index
+end
+
+def findFiles(directory)
+  puts "Scanning directory #{directory} ..."
+  files = Array.new
+  Dir.foreach(directory) do |filename|
+    next if filename.match(/^\.$/) || filename.match(/^\..*/) || filename.match(/^index\.txt.*/)
+    filename = filename.encode!('UTF-8','UTF8-MAC')
+    file = File.join(directory, filename)
+    if File.directory? file
+      files = files.concat(findFiles(file))
+    else 
+      files.push(file)
+    end
+  end
+  files
+end
+
+def indexNewFiles(index, files)
+  puts "Indexing new files..."
+  files.each do |file|
+    next if index[file] != nil
+    index[file] = FileData.new(length(file), checksum(file), IndexStatus::INDEXED)
+  end
+end
+
+def indexMissingFiles(index)
+  puts "Indexing missing files..."
+  index.each do |file, data|
+    next if data.status != IndexStatus::UNKNOWN
+    next if File.exist? file
+    data.status = IndexStatus::MISSING
+  end
+end
+
+def indexRenamedFiles(index)
+  puts "Indexing renamed files..."
+  checksums = Hash.new
+  index.each do |file, data|
+    next if data.status != IndexStatus::INDEXED
+    files = checksums[data.checksum]
+    if files == nil
+      files = Array.new
+      checksums[data.checksum] = files 
+    end
+    files.push(file)
+  end
+  index.each do |file, data|
+    next if data.status != IndexStatus::MISSING
+    files = checksums[data.checksum]
+    next if files == nil
+    files.each do |otherfile|
+      otherdata = index[otherfile]
+      next if otherdata.length != data.length
+      next if otherdata.status != IndexStatus::INDEXED
+      puts "Moved #{file} to #{otherfile}"
+      data.status = IndexStatus::DELETED
+      otherdata.status = IndexStatus::RENAMED
+      otherdata.oldFile = file
+      break
+    end
+  end
+  index.delete_if{|file, data| data.status == IndexStatus::DELETED}
+end
+
+def indexModifiedFiles(index, fast)
+  puts "Verifying index..."
+  index.each do |file, data|
+    next if data.status != IndexStatus::UNKNOWN
+    length = length(file)
+    checksum = fast ? data.checksum : checksum(file)
+    if length != data.length || checksum != data.checksum
+      checksum = fast ? checksum(file) : checksum
+      data.status = IndexStatus::ALTERED
+      data.oldLength = data.length
+      data.oldChecksum = data.checksum
+      data.length = length
+      data.checksum = checksum
+    else
+      data.status = IndexStatus::CHECKED
+    end
+  end
+end
+
+def writeLog(index, logFile)
+  return if !index.find{|file,data| data.status != IndexStatus::CHECKED}
+  puts "Writing log..."
+  keys = index.keys.sort
+  out = File.open(logFile, 'w')
+  keys.each do |file|
+    data = index[file]
+    if data.status == IndexStatus::MISSING
+      out.puts "Removed #{file}"
+      next
+    end
+    if data.status == IndexStatus::INDEXED
+      out.puts "Added #{file}"
+    end
+    if data.status == IndexStatus::RENAMED
+      out.puts "Moved #{data.oldFile} to #{file}"
+    end
+    if data.status == IndexStatus::ALTERED
+      out.puts "Modified #{file} from #{data.oldChecksum} to #{data.checksum}"
+    end
+  end
+end
+
+def writeIndex(index, file)
+  puts "Writing index..."
+  out = File.open(file, 'w')
+  index.keys.sort.each do |file|
+    data = index[file]
+    next if data.status == IndexStatus::MISSING
+    out.puts "#{file} #{data.length} #{data.checksum}"
+  end
+end
+
+def printSummary(index)
+  puts "Summary:"
+  indexed = index.count{|file, data| data.status == IndexStatus::INDEXED}
+  puts "#{indexed} new files"
+  renamed = index.count{|file, data| data.status == IndexStatus::RENAMED}
+  puts "#{renamed} renamed files"
+  missing = index.count{|file, data| data.status == IndexStatus::MISSING} 
+  puts "#{missing} missing files"
+  altered = index.count{|file, data| data.status == IndexStatus::ALTERED}
+  puts "#{altered} altered files"
+end
+
+def printFindSummary(index)
+  indexed = index.count{|file, data| data.status == IndexStatus::INDEXED}
+  if indexed
+    puts "Found #{indexed} unindexed files:"
+    index.keys.sort.each do |file|
+      puts "#{file}" if index[file].status == IndexStatus::INDEXED
+    end
+  else
+    puts "Found no unindexed files"
+  end
+end
+
+def index(indexFile, fast)
+  puts "Running #{fast ? 'file size' : 'file size and checksum'} index verification"
+  index = parseIndex(indexFile)
+  indexNewFiles(index, findFiles("."))
+  indexMissingFiles(index)
+  indexRenamedFiles(index)
+  indexModifiedFiles(index, fast)
+  printSummary(index)
+  writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
+  writeIndex(index, indexFile)
+  puts "Done."
+end
+
+def find(indexFile, fast)
+  puts "Finding unindexed files using #{fast ? 'file size' : 'file size and checksum'} index verification"
+  index = parseIndex(indexFile)
+  indexNewFiles(index, findFiles("."))
+  indexMissingFiles(index)
+  indexRenamedFiles(index)
+  printFindSummary(index)
+  puts "Done."
+end
+
+fast = ARGV.any? { |arg| arg == 'fast' }
+find = ARGV.any? { |arg| arg == 'find' }
+indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' }
+indexFile = indexFile ? indexFile : "index.txt"
+
+if find
+  find(indexFile, fast)
+else
+  index(indexFile, fast)
+end
