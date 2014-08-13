@@ -35,7 +35,7 @@ def parseIndex(file)
   puts "Reading index..."
   index = Hash.new
   if File.exists? file
-    File.open(file).each do |line|
+    File.open(file, "r:UTF-8").each do |line|
       if !/^(.*) (\d+) ([abcdef\d]+)$/.match(line)
         puts "Invalid line: " + line
         exit
@@ -56,7 +56,7 @@ def findFiles(directory)
     file = File.join(directory, filename)
     if File.directory? file
       files = files.concat(findFiles(file))
-    else 
+    else
       files.push(file)
     end
   end
@@ -88,7 +88,7 @@ def indexRenamedFiles(index)
     files = checksums[data.checksum]
     if files == nil
       files = Array.new
-      checksums[data.checksum] = files 
+      checksums[data.checksum] = files
     end
     files.push(file)
   end
@@ -154,7 +154,7 @@ end
 
 def writeIndex(index, file)
   puts "Writing index..."
-  out = File.open(file, 'w')
+  out = File.open(file, 'w:UTF-8')
   index.keys.sort.each do |file|
     data = index[file]
     next if data.status == IndexStatus::MISSING
@@ -168,7 +168,7 @@ def printSummary(index)
   puts "#{indexed} new files"
   renamed = index.count{|file, data| data.status == IndexStatus::RENAMED}
   puts "#{renamed} renamed files"
-  missing = index.count{|file, data| data.status == IndexStatus::MISSING} 
+  missing = index.count{|file, data| data.status == IndexStatus::MISSING}
   puts "#{missing} missing files"
   altered = index.count{|file, data| data.status == IndexStatus::ALTERED}
   puts "#{altered} altered files"
