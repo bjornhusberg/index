@@ -21,9 +21,6 @@ class FileData
 end
 
 def checksum(file)
-  #    File.open(file, 'rb') { |f| Zlib.crc32 f.read }.to_s
-  #    File.open(file, 'rb') { |f| Digest::MD5.hexdigest(f.read) }.to_s
-  puts "Calculating checksum for #{file}"
   Digest::MD5.file(file).to_s
 end
 
@@ -37,18 +34,17 @@ def parseIndex(file)
   if File.exists? file
     File.open(file, "r:UTF-8").each do |line|
       if !/^(.*) (\d+) ([abcdef\d]+)$/.match(line)
-        puts "Invalid line: " + line
+        puts "Index file is corrupt on line: " + line
         exit
       end
       index[$1] = FileData.new($2, $3, IndexStatus::UNKNOWN)
     end
   end
-  puts "Index size: #{index.length}"
+  puts "Index contains #{index.length} files"
   index
 end
 
 def findFiles(directory)
-  puts "Scanning directory #{directory} ..."
   files = Array.new
   Dir.foreach(directory) do |filename|
     next if filename.match(/^\.$/) || filename.match(/^\..*/) || filename.match(/^index\.txt.*/)
@@ -153,24 +149,25 @@ def writeLog(index, logFile)
 end
 
 def writeIndex(index, file)
+  return if !index.find{|f,data| data.status != IndexStatus::CHECKED}
   puts "Writing index..."
   out = File.open(file, 'w:UTF-8')
-  index.keys.sort.each do |file|
-    data = index[file]
+  index.keys.sort.each do |f|
+    data = index[f]
     next if data.status == IndexStatus::MISSING
-    out.puts "#{file} #{data.length} #{data.checksum}"
+    out.puts "#{f} #{data.length} #{data.checksum}"
   end
 end
 
 def printSummary(index)
   puts "Summary:"
   indexed = index.count{|file, data| data.status == IndexStatus::INDEXED}
-  puts "#{indexed} new files"
   renamed = index.count{|file, data| data.status == IndexStatus::RENAMED}
-  puts "#{renamed} renamed files"
   missing = index.count{|file, data| data.status == IndexStatus::MISSING}
-  puts "#{missing} missing files"
   altered = index.count{|file, data| data.status == IndexStatus::ALTERED}
+  puts "#{indexed} new files"
+  puts "#{renamed} renamed files"
+  puts "#{missing} missing files"
   puts "#{altered} altered files"
 end
 
@@ -187,9 +184,11 @@ def printFindSummary(index)
 end
 
 def index(indexFile, fast)
-  puts "Running #{fast ? 'file size' : 'file size and checksum'} index verification"
+  puts "Running #{fast ? 'fast (file size)' : 'full (file size and checksum)'} index verification"
   index = parseIndex(indexFile)
-  indexNewFiles(index, findFiles("."))
+  puts "Scanning current directory"
+  files = findFiles(".")
+  indexNewFiles(index, files)
   indexMissingFiles(index)
   indexRenamedFiles(index)
   indexModifiedFiles(index, fast)
@@ -202,7 +201,9 @@ end
 def find(indexFile, fast)
   puts "Finding unindexed files using #{fast ? 'file size' : 'file size and checksum'} index verification"
   index = parseIndex(indexFile)
-  indexNewFiles(index, findFiles("."))
+  puts "Scanning current directory"
+  files = findFiles(".")
+  indexNewFiles(index, files)
   indexMissingFiles(index)
   indexRenamedFiles(index)
   printFindSummary(index)
