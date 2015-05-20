@@ -172,14 +172,11 @@ def printSummary(index)
 end
 
 def printFindSummary(index)
-  indexed = index.count{|file, data| data.status == IndexStatus::INDEXED}
-  if indexed
-    puts "Found #{indexed} unindexed files:"
-    index.keys.sort.each do |file|
-      puts "#{file}" if index[file].status == IndexStatus::INDEXED
-    end
-  else
-    puts "Found no unindexed files"
+  indexed = index.select{|file, data|
+    data.status == IndexStatus::INDEXED || data.status == IndexStatus::ALTERED }
+  puts "Found #{indexed.count} unindexed files:"
+  indexed.keys.sort.each do |file|
+    puts "#{file}"
   end
 end
 
@@ -206,6 +203,7 @@ def find(indexFile, fast)
   indexNewFiles(index, files)
   indexMissingFiles(index)
   indexRenamedFiles(index)
+  indexModifiedFiles(index, fast)
   printFindSummary(index)
   puts "Done."
 end
