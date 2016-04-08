@@ -126,24 +126,33 @@ def indexModifiedFiles(index, fast)
 end
 
 def writeLog(index, logFile)
-  return if !index.find{|file,data| data.status != IndexStatus::CHECKED}
   puts "Writing log..."
-  keys = index.keys.sort
-  out = File.open(logFile, 'w')
-  keys.each do |file|
-    data = index[file]
-    if data.status == IndexStatus::MISSING
-      out.puts "Removed #{file}"
-      next
+  files = index.select{|file,data| data.status == IndexStatus::MISSING}
+  if !files.empty?
+    out = File.open(logFile + "-deleted", 'w')
+    files.each do |file,data|
+      out.puts file
     end
-    if data.status == IndexStatus::INDEXED
-      out.puts "Added #{file}"
+  end
+  files = index.select{|file,data| data.status == IndexStatus::INDEXED}
+  if !files.empty?
+    out = File.open(logFile + "-new", 'w')
+    files.each do |file,data|
+      out.puts file
     end
-    if data.status == IndexStatus::RENAMED
-      out.puts "Moved #{data.oldFile} to #{file}"
+  end
+  files = index.select{|file,data| data.status == IndexStatus::RENAMED}
+  if !files.empty?
+    out = File.open(logFile + "-moved", 'w')
+    files.each do |file,data|
+      out.puts "#{data.oldFile} to #{file}"
     end
-    if data.status == IndexStatus::ALTERED
-      out.puts "Modified #{file} from #{data.oldChecksum} to #{data.checksum}"
+  end
+  files = index.select{|file,data| data.status == IndexStatus::ALTERED}
+  if !files.empty?
+    out = File.open(logFile + "-modified", 'w')
+    files.each do |file,data|
+      out.puts "#{file} from #{data.oldChecksum} to #{data.checksum}"
     end
   end
 end
