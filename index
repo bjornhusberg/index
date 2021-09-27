@@ -217,12 +217,33 @@ def find(indexFile, fast)
   puts "Done."
 end
 
+def dedup(indexFile, fast)
+  puts "Finding duplicated files in the index"
+  index = parseIndex(indexFile)
+  groups = index.group_by{ |file, data| data.length + "-" + data.checksum }
+  duplicates = groups.select{ |key, files| files.count > 1 }
+  bytes = 0
+  duplicates.each do | key, files |
+    puts "Duplicates #{key}:"
+    files.each do | file, data |
+      puts file
+    end
+    bytes = bytes + (files.count - 1) * (files.first[1].length.to_i)
+  end
+  puts "Deduplication would save #{bytes/1048576}MB"
+  puts "Done."
+end
+
 fast = ARGV.any? { |arg| arg == 'fast' }
 find = ARGV.any? { |arg| arg == 'find' }
-indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' }
+dedup = ARGV.any? { |arg| arg == 'dedup' }
+
+indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' && arg != 'dedup' }
 indexFile = indexFile ? indexFile : "index.txt"
 
-if find
+if dedup
+  dedup(indexFile, fast)
+elsif find
   find(indexFile, fast)
 else
   index(indexFile, fast)
