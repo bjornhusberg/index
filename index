@@ -29,18 +29,18 @@ def length(file)
 end
 
 def parseIndex(file)
-  puts "Reading index..."
+  STDERR.puts "Reading index..."
   index = Hash.new
   if File.exists? file
     File.open(file, "r:UTF-8").each do |line|
       if !/^(.*) (\d+) ([abcdef\d]+)$/.match(line)
-        puts "Index file is corrupt on line: " + line
+        STDERR.puts "Index file is corrupt on line: " + line
         exit
       end
       index[$1] = FileData.new($2, $3, IndexStatus::UNKNOWN)
     end
   end
-  puts "Index contains #{index.length} files"
+  STDERR.puts "Index contains #{index.length} files"
   index
 end
 
@@ -60,7 +60,7 @@ def findFiles(directory)
 end
 
 def indexNewFiles(index, files)
-  puts "Indexing new files..."
+  STDERR.puts "Indexing new files..."
   files.each do |file|
     next if index[file] != nil
     index[file] = FileData.new(length(file), checksum(file), IndexStatus::INDEXED)
@@ -68,7 +68,7 @@ def indexNewFiles(index, files)
 end
 
 def indexMissingFiles(index)
-  puts "Indexing missing files..."
+  STDERR.puts "Indexing missing files..."
   index.each do |file, data|
     next if data.status != IndexStatus::UNKNOWN
     next if File.exist? file
@@ -77,7 +77,7 @@ def indexMissingFiles(index)
 end
 
 def indexRenamedFiles(index)
-  puts "Indexing renamed files..."
+  STDERR.puts "Indexing renamed files..."
   checksums = Hash.new
   index.each do |file, data|
     next if data.status != IndexStatus::INDEXED
@@ -96,7 +96,7 @@ def indexRenamedFiles(index)
       otherdata = index[otherfile]
       next if otherdata.length != data.length
       next if otherdata.status != IndexStatus::INDEXED
-      puts "Moved #{file} to #{otherfile}"
+      STDERR.puts "Moved #{file} to #{otherfile}"
       data.status = IndexStatus::DELETED
       otherdata.status = IndexStatus::RENAMED
       otherdata.oldFile = file
@@ -107,7 +107,7 @@ def indexRenamedFiles(index)
 end
 
 def indexModifiedFiles(index, fast)
-  puts "Verifying index..."
+  STDERR.puts "Verifying index..."
   index.each do |file, data|
     next if data.status != IndexStatus::UNKNOWN
     length = length(file)
@@ -126,7 +126,7 @@ def indexModifiedFiles(index, fast)
 end
 
 def writeLog(index, logFile)
-  puts "Writing log..."
+  STDERR.puts "Writing log..."
   files = index.select{|file,data| data.status == IndexStatus::MISSING}
   if !files.empty?
     out = File.open(logFile + "-deleted", 'w')
@@ -159,7 +159,7 @@ end
 
 def writeIndex(index, file)
   return if !index.find{|f,data| data.status != IndexStatus::CHECKED}
-  puts "Writing index..."
+  STDERR.puts "Writing index..."
   out = File.open(file, 'w:UTF-8')
   index.keys.sort.each do |f|
     data = index[f]
@@ -169,30 +169,30 @@ def writeIndex(index, file)
 end
 
 def printSummary(index)
-  puts "Summary:"
+  STDERR.puts "Summary:"
   indexed = index.count{|file, data| data.status == IndexStatus::INDEXED}
   renamed = index.count{|file, data| data.status == IndexStatus::RENAMED}
   missing = index.count{|file, data| data.status == IndexStatus::MISSING}
   altered = index.count{|file, data| data.status == IndexStatus::ALTERED}
-  puts "#{indexed} new files"
-  puts "#{renamed} renamed files"
-  puts "#{missing} missing files"
-  puts "#{altered} altered files"
+  STDERR.puts "#{indexed} new files"
+  STDERR.puts "#{renamed} renamed files"
+  STDERR.puts "#{missing} missing files"
+  STDERR.puts "#{altered} altered files"
 end
 
 def printFindSummary(index)
   indexed = index.select{|file, data|
     data.status == IndexStatus::INDEXED || data.status == IndexStatus::ALTERED }
-  puts "Found #{indexed.count} unindexed files:"
+  STDERR.puts "Found #{indexed.count} unindexed files:"
   indexed.keys.sort.each do |file|
-    puts "#{file}"
+    STDOUT.puts "#{file}"
   end
 end
 
 def index(indexFile, fast)
-  puts "Running #{fast ? 'fast (file size)' : 'full (file size and checksum)'} index verification"
+  STDERR.puts "Running #{fast ? 'fast (file size)' : 'full (file size and checksum)'} index verification"
   index = parseIndex(indexFile)
-  puts "Scanning current directory"
+  STDERR.puts "Scanning current directory"
   files = findFiles(".")
   indexNewFiles(index, files)
   indexMissingFiles(index)
@@ -201,37 +201,38 @@ def index(indexFile, fast)
   printSummary(index)
   writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
   writeIndex(index, indexFile)
-  puts "Done."
+  STDERR.puts "Done."
 end
 
 def find(indexFile, fast)
-  puts "Finding unindexed files using #{fast ? 'file size' : 'file size and checksum'} index verification"
+  STDERR.puts "Finding unindexed files using #{fast ? 'file size' : 'file size and checksum'} index verification"
   index = parseIndex(indexFile)
-  puts "Scanning current directory"
+  STDERR.puts "Scanning current directory"
   files = findFiles(".")
   indexNewFiles(index, files)
   indexMissingFiles(index)
   indexRenamedFiles(index)
   indexModifiedFiles(index, fast)
   printFindSummary(index)
-  puts "Done."
+  STDERR.puts "Done."
 end
 
 def dedup(indexFile)
-  puts "Finding duplicated files in the index"
+  STDERR.puts "Finding duplicated files in the index"
   index = parseIndex(indexFile)
   groups = index.group_by{ |file, data| data.length + "-" + data.checksum }
   duplicates = groups.select{ |key, files| files.count > 1 }
   bytes = 0
   duplicates.each do | key, files |
-    puts "Duplicates #{key}:"
-    files.each do | file, data |
-      puts file
+    STDERR.puts "Duplicates #{key}:"
+    STDERR.puts files.first[0]
+    files.drop(1).each do | file, data |
+      STDOUT.puts file
+      bytes = bytes + data.length.to_i
     end
-    bytes = bytes + (files.count - 1) * (files.first[1].length.to_i)
   end
-  puts "Deduplication would save #{bytes/1048576}MB"
-  puts "Done."
+  STDERR.puts "Deduplication would save #{bytes/1048576}MB"
+  STDERR.puts "Done."
 end
 
 fast = ARGV.any? { |arg| arg == 'fast' }
