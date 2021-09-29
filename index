@@ -250,7 +250,7 @@ def dedup(indexFile)
     end
   end
   if count > 0
-    STDERR.puts "Duplicates in #{count} files would save #{formatFileSize bytes}."
+    STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
   else
     STDERR.puts "No duplicate files found"
   end
