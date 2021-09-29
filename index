@@ -224,6 +224,16 @@ def find(indexFile, fast)
   STDERR.puts "Done."
 end
 
+def formatFileSize(size)
+  for prefix in ['', 'k', 'M', 'G', 'T']
+    if size > 1024 && prefix != 'T'
+      size = size / 1024
+    else
+      return "#{size}#{prefix}B"
+    end
+  end
+end
+
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   index = parseIndex(indexFile)
@@ -232,16 +242,15 @@ def dedup(indexFile)
   bytes = 0
   count = 0
   duplicates.each do | key, files |
-    STDERR.puts "Duplicates #{key}:"
-    STDERR.puts files.first[0]
+    STDERR.puts "Duplicates of #{files.first[0]}:"
     files.drop(1).each do | file, data |
       STDOUT.puts file
-      bytes = bytes + data.length.to_i
-      count = count + 1
+      bytes += data.length.to_i
+      count += 1
     end
   end
   if count > 0
-    STDERR.puts "Deduplication of #{count} files would save #{bytes/1048576}MB"
+    STDERR.puts "Duplicates in #{count} files would save #{formatFileSize bytes}."
   else
     STDERR.puts "No duplicate files found"
   end
