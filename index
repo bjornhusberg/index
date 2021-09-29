@@ -155,9 +155,9 @@ def writeLog(index, logFile)
       out.puts "#{file} from #{data.oldChecksum} to #{data.checksum}"
     end
   end
-  files = index.select{|file,data| data.status != IndexStatus::INDEXED}
-  if files.any?{|file,data| data.status != IndexStatus::CHECKED}
+  if index.any?{|file,data| data.status != IndexStatus::CHECKED}
     out = File.open(logFile + "-backup", 'w')
+    files = index.select{|file,data| data.status != IndexStatus::INDEXED}
     files.each do |file,data|
       out.puts "#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}"
     end
