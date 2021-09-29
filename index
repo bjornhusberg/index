@@ -230,15 +230,21 @@ def dedup(indexFile)
   groups = index.group_by{ |file, data| data.length + "-" + data.checksum }
   duplicates = groups.select{ |key, files| files.count > 1 }
   bytes = 0
+  count = 0
   duplicates.each do | key, files |
     STDERR.puts "Duplicates #{key}:"
     STDERR.puts files.first[0]
     files.drop(1).each do | file, data |
       STDOUT.puts file
       bytes = bytes + data.length.to_i
+      count = count + 1
     end
   end
-  STDERR.puts "Deduplication would save #{bytes/1048576}MB"
+  if count > 0
+    STDERR.puts "Deduplication of #{count} files would save #{bytes/1048576}MB"
+  else
+    STDERR.puts "No duplicate files found"
+  end
   STDERR.puts "Done."
 end
 
