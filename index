@@ -223,23 +223,28 @@ def dedup(indexFile)
   STDERR.puts "Done."
 end
 
-indexFileArgs = ARGV - ['fast', 'find', 'dedup', 'dry']
-if indexFileArgs.count > 1
+def parseIndexFile(argv)
+end
+
+fast = ARGV.delete('fast')
+find = ARGV.delete('find')
+dedup = ARGV.delete('dedup')
+dry = ARGV.delete('dry')
+
+if ARGV.count > 1
   STDERR.puts "Usage: index [dedup|find] [fast] [dry] [index file path]"
   return
-end
-
-if indexFileArgs.any? && !File.exists?(indexFileArgs.first)
-  STDERR.puts "Index file not found: #{indexFileArgs.first}"
+elsif ARGV.any? && !File.exists?(ARGV.first)
+  STDERR.puts "Index file not found: #{ARGV.first}"
   return
 end
 
-indexFile = indexFileArgs.first || "index.txt"
+indexFile = ARGV.first || "index.txt"
 
-if ARGV.include?('dedup')
+if dedup
   dedup(indexFile)
-elsif ARGV.include?('find')
+elsif find
   find(indexFile)
 else
-  index(indexFile, ARGV.include?('fast'), ARGV.include?('dry'))
+  index(indexFile, fast, dry)
 end
