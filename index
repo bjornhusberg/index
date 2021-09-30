@@ -165,7 +165,7 @@ def writeIndex(index, file)
   end
 end
 
-def index(indexFile, fast)
+def index(indexFile, fast, dry)
   index = parseIndex(indexFile)
   STDERR.puts "Index contains #{index.length} files"
   STDERR.puts "Running #{fast ? 'file size' : 'full'} index verification..."
@@ -179,9 +179,11 @@ def index(indexFile, fast)
     STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::RENAMED}} renamed files"
     STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::MISSING}} missing files"
     STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::ALTERED}} altered files"
-    writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
-    writeIndex(index, indexFile)
-    STDERR.puts "Index updated"
+    if !dry
+      writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
+      writeIndex(index, indexFile)
+      STDERR.puts "Index updated"
+    end
   else
     STDERR.puts "Index not modified"
   end
@@ -237,14 +239,13 @@ end
 fast = ARGV.any? { |arg| arg == 'fast' }
 find = ARGV.any? { |arg| arg == 'find' }
 dedup = ARGV.any? { |arg| arg == 'dedup' }
-
-indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' && arg != 'dedup' }
-indexFile = indexFile ? indexFile : "index.txt"
+dry = ARGV.any? { |arg| arg == 'dry' }
+indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' && arg != 'dedup' && arg != 'dry'} || "index.txt"
 
 if dedup
   dedup(indexFile)
 elsif find
   find(indexFile)
 else
-  index(indexFile, fast)
+  index(indexFile, fast, dry)
 end
