@@ -154,6 +154,16 @@ def writeIndex(index, file)
   .each{|file, data| out.puts("#{file} #{data.length} #{data.checksum}")}
 end
 
+def formatFileSize(size)
+  for prefix in ['', 'k', 'M', 'G', 'T']
+    if size > 1024 && prefix != 'T'
+      size = size / 1024
+    else
+      return "#{size}#{prefix}B"
+    end
+  end
+end
+
 def index(indexFile, fast, dry)
   index = parseIndex(indexFile)
   STDERR.puts "Index contains #{index.length} files"
@@ -190,16 +200,6 @@ def find(indexFile)
   newFiles.each{|file, data| STDOUT.puts(file)}
 end
 
-def formatFileSize(size)
-  for prefix in ['', 'k', 'M', 'G', 'T']
-    if size > 1024 && prefix != 'T'
-      size = size / 1024
-    else
-      return "#{size}#{prefix}B"
-    end
-  end
-end
-
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   index = parseIndex(indexFile)
@@ -223,16 +223,18 @@ def dedup(indexFile)
   STDERR.puts "Done."
 end
 
-fast = ARGV.any?{|arg| arg == 'fast'}
-find = ARGV.any?{|arg| arg == 'find'}
-dedup = ARGV.any?{|arg| arg == 'dedup'}
-dry = ARGV.any?{|arg| arg == 'dry'}
-indexFile = ARGV.find{|arg| arg != 'fast' && arg != 'find' && arg != 'dedup' && arg != 'dry'} || "index.txt"
+indexFileArgs = ARGV - ['fast', 'find', 'dedup', 'dry']
+if indexFileArgs.count > 1
+  STDERR.puts "Usage: index [dedup|find] [fast] [dry] [index file path]"
+  return
+end
 
-if dedup
+indexFile = indexFileArgs.first || "index.txt"
+
+if ARGV.include?('dedup')
   dedup(indexFile)
-elsif find
+elsif ARGV.include?('find')
   find(indexFile)
 else
-  index(indexFile, fast, dry)
+  index(indexFile, ARGV.include?('fast'), ARGV.include?('dry'))
 end
