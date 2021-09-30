@@ -229,6 +229,11 @@ if indexFileArgs.count > 1
   return
 end
 
+if indexFileArgs.any? && !File.exists?(indexFileArgs.first)
+  STDERR.puts "Index file not found: #{indexFileArgs.first}"
+  return
+end
+
 indexFile = indexFileArgs.first || "index.txt"
 
 if ARGV.include?('dedup')
