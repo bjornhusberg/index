@@ -37,6 +37,7 @@ def parseIndex(file)
         exit
       end
       index[$1] = FileData.new($2, $3, IndexStatus::UNKNOWN)
+    end
   end
   index
 end
@@ -123,45 +124,34 @@ def writeLog(index, logFile)
   files = index.select{|file,data| data.status == IndexStatus::MISSING}
   if !files.empty?
     out = File.open(logFile + "-deleted", 'w')
-    files.each do |file,data|
-      out.puts file
-    end
+    files.each{|file,data| out.puts(file)}
   end
   files = index.select{|file,data| data.status == IndexStatus::INDEXED}
   if !files.empty?
     out = File.open(logFile + "-new", 'w')
-    files.each do |file,data|
-      out.puts file
-    end
+    files.each{|file,data| out.puts(file)}
   end
   files = index.select{|file,data| data.status == IndexStatus::RENAMED}
   if !files.empty?
     out = File.open(logFile + "-moved", 'w')
-    files.each do |file,data|
-      out.puts "#{data.oldFile} to #{file}"
-    end
+    files.each{|file,data| out.puts("#{data.oldFile} to #{file}")}
   end
   files = index.select{|file,data| data.status == IndexStatus::ALTERED}
   if !files.empty?
     out = File.open(logFile + "-modified", 'w')
-    files.each do |file,data|
-      out.puts "#{file} from #{data.oldChecksum} to #{data.checksum}"
-    end
+    files.each{|file,data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
   end
   out = File.open(logFile + "-backup", 'w')
   files = index.select{|file,data| data.status != IndexStatus::INDEXED}
-  files.each do |file,data|
-    out.puts "#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}"
-  end
+  files.each{|file,data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
 end
 
 def writeIndex(index, file)
   out = File.open(file, 'w:UTF-8')
-  index.keys.sort.each do |f|
-    data = index[f]
-    next if data.status == IndexStatus::MISSING
-    out.puts "#{f} #{data.length} #{data.checksum}"
-  end
+  index
+  .select{|file, data| data.status != IndexStatus::MISSING}
+  .sort
+  .each{|file, data| out.puts("#{file} #{data.length} #{data.checksum}")}
 end
 
 def index(indexFile, fast, dry)
@@ -197,9 +187,7 @@ def find(indexFile)
   indexCurrentDirectory(newIndex)
   newFiles = newIndex.select{|file, data| index.all?{ |indexFile, indexData| data.checksum != indexData.checksum || data.length != indexData.length }}
   STDERR.puts "Found #{newFiles.count} unindexed files"
-  newFiles.each do |file, data|
-    STDOUT.puts file
-  end
+  newFiles.each{|file, data| STDOUT.puts(file)}
 end
 
 def formatFileSize(size)
