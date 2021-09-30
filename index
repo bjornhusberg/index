@@ -196,8 +196,8 @@ def find(indexFile)
   newIndex = Hash.new
   indexCurrentDirectory(newIndex)
   newFiles = newIndex.select{|file, data| index.all?{ |indexFile, indexData| data.checksum != indexData.checksum || data.length != indexData.length }}
-  STDERR.puts "Found #{newFiles.count} unindexed files"
   newFiles.each{|file, data| STDOUT.puts(file)}
+  STDERR.puts "Found #{newFiles.count} unindexed files"
 end
 
 def dedup(indexFile)
