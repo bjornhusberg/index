@@ -37,7 +37,6 @@ def parseIndex(file)
         exit
       end
       index[$1] = FileData.new($2, $3, IndexStatus::UNKNOWN)
-    end
   end
   index
 end
@@ -49,7 +48,7 @@ def findFiles(directory)
   .each do |filename|
     filename = filename.encode!('UTF-8','UTF8-MAC')
     file = File.join(directory, filename)
-    if File.directory? file
+    if File.directory?(file)
       files = files.concat(findFiles(file))
     else
       files.push(file)
@@ -196,7 +195,7 @@ def find(indexFile)
   STDERR.puts "Indexing current directory..."
   newIndex = Hash.new
   indexCurrentDirectory(newIndex)
-  newFiles = newIndex.select{ |file, data| ! index.any?{ |indexFile, indexData| data.checksum == indexData.checksum && data.length == indexData.length }}
+  newFiles = newIndex.select{|file, data| index.all?{ |indexFile, indexData| data.checksum != indexData.checksum || data.length != indexData.length }}
   STDERR.puts "Found #{newFiles.count} unindexed files"
   newFiles.each do |file, data|
     STDOUT.puts file
@@ -216,8 +215,8 @@ end
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   index = parseIndex(indexFile)
-  groups = index.group_by{ |file, data| data.length + "-" + data.checksum }
-  duplicates = groups.select{ |key, files| files.count > 1 }
+  groups = index.group_by{|file, data| data.length + "-" + data.checksum}
+  duplicates = groups.select{|key, files| files.count > 1}
   bytes = 0
   count = 0
   duplicates.each do |key, files|
@@ -236,11 +235,11 @@ def dedup(indexFile)
   STDERR.puts "Done."
 end
 
-fast = ARGV.any? { |arg| arg == 'fast' }
-find = ARGV.any? { |arg| arg == 'find' }
-dedup = ARGV.any? { |arg| arg == 'dedup' }
-dry = ARGV.any? { |arg| arg == 'dry' }
-indexFile = ARGV.find { |arg| arg != 'fast' && arg != 'find' && arg != 'dedup' && arg != 'dry'} || "index.txt"
+fast = ARGV.any?{|arg| arg == 'fast'}
+find = ARGV.any?{|arg| arg == 'find'}
+dedup = ARGV.any?{|arg| arg == 'dedup'}
+dry = ARGV.any?{|arg| arg == 'dry'}
+indexFile = ARGV.find{|arg| arg != 'fast' && arg != 'find' && arg != 'dedup' && arg != 'dry'} || "index.txt"
 
 if dedup
   dedup(indexFile)
