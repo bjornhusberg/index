@@ -223,9 +223,6 @@ def dedup(indexFile)
   STDERR.puts "Done."
 end
 
-def parseIndexFile(argv)
-end
-
 fast = ARGV.delete('fast')
 find = ARGV.delete('find')
 dedup = ARGV.delete('dedup')
