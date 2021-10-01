@@ -123,35 +123,41 @@ end
 def writeLog(index, logFile)
   files = index.select{|file,data| data.status == IndexStatus::MISSING}
   if !files.empty?
-    out = File.open(logFile + "-deleted", 'w')
-    files.each{|file,data| out.puts(file)}
+    File.open(logFile + "-deleted", 'w') do |out|
+      files.each{|file,data| out.puts(file)}
+    end
   end
   files = index.select{|file,data| data.status == IndexStatus::INDEXED}
   if !files.empty?
-    out = File.open(logFile + "-new", 'w')
-    files.each{|file,data| out.puts(file)}
+    File.open(logFile + "-new", 'w') do |out|
+      files.each{|file,data| out.puts(file)}
+    end
   end
   files = index.select{|file,data| data.status == IndexStatus::RENAMED}
   if !files.empty?
-    out = File.open(logFile + "-moved", 'w')
-    files.each{|file,data| out.puts("#{data.oldFile} to #{file}")}
+    File.open(logFile + "-moved", 'w') do |out|
+      files.each{|file,data| out.puts("#{data.oldFile} to #{file}")}
+    end
   end
   files = index.select{|file,data| data.status == IndexStatus::ALTERED}
   if !files.empty?
-    out = File.open(logFile + "-modified", 'w')
-    files.each{|file,data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
+    File.open(logFile + "-modified", 'w') do |out|
+      files.each{|file,data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
+    end
   end
-  out = File.open(logFile + "-backup", 'w')
   files = index.select{|file,data| data.status != IndexStatus::INDEXED}
-  files.each{|file,data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
+  File.open(logFile + "-backup", 'w') do |out|
+    files.each{|file,data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
+  end
 end
 
 def writeIndex(index, file)
-  out = File.open(file, 'w:UTF-8')
-  index
-  .select{|file, data| data.status != IndexStatus::MISSING}
-  .sort
-  .each{|file, data| out.puts("#{file} #{data.length} #{data.checksum}")}
+  File.open(file, 'w:UTF-8') do |out|
+    index
+    .select{|file, data| data.status != IndexStatus::MISSING}
+    .sort
+    .each{|file, data| out.puts("#{file} #{data.length} #{data.checksum}")}
+  end
 end
 
 def formatFileSize(size)
