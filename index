@@ -121,33 +121,33 @@ def verifyIndex(index, fast)
 end
 
 def writeLog(index, logFile)
-  files = index.select{|file,data| data.status == IndexStatus::MISSING}
+  files = index.select{|file, data| data.status == IndexStatus::MISSING}
   if !files.empty?
     File.open(logFile + "-deleted", 'w') do |out|
-      files.each{|file,data| out.puts(file)}
+      files.each{|file, data| out.puts(file)}
     end
   end
-  files = index.select{|file,data| data.status == IndexStatus::INDEXED}
+  files = index.select{|file, data| data.status == IndexStatus::INDEXED}
   if !files.empty?
     File.open(logFile + "-new", 'w') do |out|
-      files.each{|file,data| out.puts(file)}
+      files.each{|file, data| out.puts(file)}
     end
   end
-  files = index.select{|file,data| data.status == IndexStatus::RENAMED}
+  files = index.select{|file, data| data.status == IndexStatus::RENAMED}
   if !files.empty?
     File.open(logFile + "-moved", 'w') do |out|
-      files.each{|file,data| out.puts("#{data.oldFile} to #{file}")}
+      files.each{|file, data| out.puts("#{data.oldFile} to #{file}")}
     end
   end
-  files = index.select{|file,data| data.status == IndexStatus::ALTERED}
+  files = index.select{|file, data| data.status == IndexStatus::ALTERED}
   if !files.empty?
     File.open(logFile + "-modified", 'w') do |out|
-      files.each{|file,data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
+      files.each{|file, data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
     end
   end
-  files = index.select{|file,data| data.status != IndexStatus::INDEXED}
+  files = index.select{|file, data| data.status != IndexStatus::INDEXED}
   File.open(logFile + "-backup", 'w') do |out|
-    files.each{|file,data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
+    files.each{|file, data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
   end
 end
 
@@ -178,7 +178,7 @@ def index(indexFile, fast, dry)
   indexMissingFiles(index)
   indexRenamedFiles(index)
   verifyIndex(index, fast)
-  if index.any?{|f,data| data.status != IndexStatus::CHECKED}
+  if index.any?{|file, data| data.status != IndexStatus::CHECKED}
     STDERR.puts "Update summary:"
     STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::INDEXED}} new files"
     STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::RENAMED}} renamed files"
