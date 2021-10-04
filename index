@@ -196,13 +196,13 @@ def dedup(indexFile)
   duplicates = parseIndex(indexFile)
   .group_by{|file, data| data.size + "-" + data.checksum}
   .select{|key, files| files.count > 1}
-  duplicates.each do |key, files|
-    STDERR.puts "Duplicates of #{files.first[0]}:"
-    STDOUT.puts(files.drop(1).map{|file, data| file})
-  end
   count = duplicates.sum{|key, files| files.length - 1}
-  bytes = duplicates.sum{|key, files| (files.length - 1) * files.first[1].size.to_i}
   if count > 0
+    duplicates.each do |key, files|
+      STDERR.puts "Duplicates of #{files.first[0]}:"
+      STDOUT.puts(files.drop(1).map{|file, data| file})
+    end
+    bytes = duplicates.sum{|key, files| (files.length - 1) * files.first[1].size.to_i}
     STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
   else
     STDERR.puts "No duplicate files found"
