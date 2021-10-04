@@ -14,9 +14,9 @@ module IndexStatus
 end
 
 class FileData
-  attr_accessor :length, :checksum, :status, :oldLength, :oldChecksum, :oldFile
+  attr_accessor :size, :checksum, :status, :oldSize, :oldChecksum, :oldFile
   def initialize(*args)
-    @length, @checksum, @status = *args
+    @size, @checksum, @status = *args
   end
 end
 
@@ -24,7 +24,7 @@ def checksum(file)
   Digest::MD5.file(file).to_s
 end
 
-def length(file)
+def size(file)
   File.size(file).to_s
 end
 
@@ -61,7 +61,7 @@ end
 def indexCurrentDirectory(index)
   findFiles(".")
   .select{|file| index[file] == nil}
-  .each{|file| index[file] = FileData.new(length(file), checksum(file), IndexStatus::INDEXED)}
+  .each{|file| index[file] = FileData.new(size(file), checksum(file), IndexStatus::INDEXED)}
 end
 
 def indexMissingFiles(index)
@@ -89,7 +89,7 @@ def indexRenamedFiles(index)
     next if files == nil
     files.each do |otherfile|
       otherdata = index[otherfile]
-      next if otherdata.length != data.length
+      next if otherdata.size != data.size
       next if otherdata.status != IndexStatus::INDEXED
       STDERR.puts "Moved #{file} to #{otherfile}"
       data.status = IndexStatus::DELETED
@@ -105,14 +105,14 @@ def verifyIndex(index, fast)
   index
   .select{|file, data| data.status == IndexStatus::UNKNOWN}
   .each do |file, data|
-    length = length(file)
+    size = size(file)
     checksum = fast ? data.checksum : checksum(file)
-    if length != data.length || checksum != data.checksum
+    if size != data.size || checksum != data.checksum
       checksum = fast ? checksum(file) : checksum
       data.status = IndexStatus::ALTERED
-      data.oldLength = data.length
+      data.oldSize = data.size
       data.oldChecksum = data.checksum
-      data.length = length
+      data.size = size
       data.checksum = checksum
     else
       data.status = IndexStatus::CHECKED
@@ -143,14 +143,14 @@ def writeLog(index, logFile)
     .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
   writeFile("#{logFile}-backup",
     index.select{|file, data| data.status != IndexStatus::INDEXED}
-    .map{|file, data| "#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}"})
+    .map{|file, data| "#{data.oldFile || file} #{data.oldSize || data.size} #{data.oldChecksum || data.checksum}"})
 end
 
 def writeIndex(index, file)
   writeFile(file,
     index.select{|file, data| data.status != IndexStatus::MISSING}
     .sort
-    .map{|file, data| "#{file} #{data.length} #{data.checksum}"})
+    .map{|file, data| "#{file} #{data.size} #{data.checksum}"})
 end
 
 def formatFileSize(size)
@@ -202,14 +202,14 @@ end
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   duplicates = parseIndex(indexFile)
-  .group_by{|file, data| data.length + "-" + data.checksum}
+  .group_by{|file, data| data.size + "-" + data.checksum}
   .select{|key, files| files.count > 1}
   duplicates.each do |key, files|
     STDERR.puts "Duplicates of #{files.first[0]}:"
     STDOUT.puts(files.drop(1).map{|file, data| file})
   end
-  count = duplicates.sum{|key, files| files.length - 1};
-  bytes = duplicates.sum{|key, files| (files.length - 1) * files[0][1].length.to_i}
+  count = duplicates.sum{|key, files| files.length - 1}
+  bytes = duplicates.sum{|key, files| (files.length - 1) * files.first[1].size.to_i}
   if count > 0
     STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
   else
