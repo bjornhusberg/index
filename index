@@ -42,6 +42,10 @@ def parseIndex(file)
   index
 end
 
+def filterIndex(index, status)
+  index.select{|file, data| data.status == status}
+end
+
 def findFiles(directory)
   files = Array.new
   Dir.foreach(directory)
@@ -72,8 +76,7 @@ end
 
 def indexRenamedFiles(index)
   checksums = Hash.new
-  index
-  .select{|file, data| data.status == IndexStatus::INDEXED}
+  filterIndex(index, IndexStatus::INDEXED)
   .each do |file, data|
     files = checksums[data.checksum]
     if files == nil
@@ -82,8 +85,7 @@ def indexRenamedFiles(index)
     end
     files.push(file)
   end
-  index
-  .select{|file, data| data.status == IndexStatus::MISSING}
+  filterIndex(index, IndexStatus::MISSING)
   .each do |file, data|
     files = checksums[data.checksum]
     next if files == nil
@@ -102,8 +104,7 @@ def indexRenamedFiles(index)
 end
 
 def verifyIndex(index, fast)
-  index
-  .select{|file, data| data.status == IndexStatus::UNKNOWN}
+  filterIndex(index, IndexStatus::UNKNOWN)
   .each do |file, data|
     size = size(file)
     checksum = fast ? data.checksum : checksum(file)
@@ -125,15 +126,11 @@ def writeFile(filename, lines, skipIfEmpty=true)
 end
 
 def writeLog(index, logFile)
-  writeFile("#{logFile}-deleted",
-    index.select{|file, data| data.status == IndexStatus::MISSING}.keys)
-  writeFile("#{logFile}-new",
-    index.select{|file, data| data.status == IndexStatus::INDEXED}.keys)
-  writeFile("#{logFile}-moved",
-    index.select{|file, data| data.status == IndexStatus::RENAMED}
+  writeFile("#{logFile}-deleted", filterIndex(index, IndexStatus::MISSING).keys)
+  writeFile("#{logFile}-new", filterIndex(index, IndexStatus::INDEXED).keys)
+  writeFile("#{logFile}-moved", filterIndex(index, IndexStatus::RENAMED)
     .map{|file, data| "#{data.oldFile} to #{file}"})
-  writeFile("#{logFile}-modified",
-    index.select{|file, data| data.status == IndexStatus::ALTERED}
+  writeFile("#{logFile}-modified", filterIndex(index, IndexStatus::ALTERED)
     .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
   writeFile("#{logFile}-backup",
     index.select{|file, data| data.status != IndexStatus::INDEXED}
@@ -168,10 +165,10 @@ def index(indexFile, fast, dry)
   verifyIndex(index, fast)
   if index.any?{|file, data| data.status != IndexStatus::CHECKED}
     STDERR.puts "Update summary:"
-    STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::INDEXED}} new files"
-    STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::RENAMED}} renamed files"
-    STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::MISSING}} missing files"
-    STDERR.puts "#{index.count{|file, data| data.status == IndexStatus::ALTERED}} altered files"
+    STDERR.puts "#{filterIndex(index, IndexStatus::INDEXED).count} new files"
+    STDERR.puts "#{filterIndex(index, IndexStatus::RENAMED).count} renamed files"
+    STDERR.puts "#{filterIndex(index, IndexStatus::MISSING).count} missing files"
+    STDERR.puts "#{filterIndex(index, IndexStatus::ALTERED).count} altered files"
     if !dry
       writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
       writeIndex(index, indexFile)
