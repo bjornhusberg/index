@@ -120,25 +120,19 @@ def verifyIndex(index, fast)
   end
 end
 
-def writeOptionalFile(filename, lines)
-  if !lines.empty?
-    writeFile(filename, lines)
-  end
-end
-
-def writeFile(filename, lines)
-  File.open(filename, 'w:UTF-8'){|out| out.puts(lines)}
+def writeFile(filename, lines, skipIfEmpty=true)
+  File.open(filename, 'w:UTF-8'){|out| out.puts(lines)} if !skipIfEmpty || !lines.empty?
 end
 
 def writeLog(index, logFile)
-  writeOptionalFile("#{logFile}-deleted",
+  writeFile("#{logFile}-deleted",
     index.select{|file, data| data.status == IndexStatus::MISSING}.keys)
-  writeOptionalFile("#{logFile}-new",
+  writeFile("#{logFile}-new",
     index.select{|file, data| data.status == IndexStatus::INDEXED}.keys)
-  writeOptionalFile("#{logFile}-moved",
+  writeFile("#{logFile}-moved",
     index.select{|file, data| data.status == IndexStatus::RENAMED}
     .map{|file, data| "#{data.oldFile} to #{file}"})
-  writeOptionalFile("#{logFile}-modified",
+  writeFile("#{logFile}-modified",
     index.select{|file, data| data.status == IndexStatus::ALTERED}
     .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
   writeFile("#{logFile}-backup",
@@ -150,7 +144,8 @@ def writeIndex(index, file)
   writeFile(file,
     index.select{|file, data| data.status != IndexStatus::MISSING}
     .sort
-    .map{|file, data| "#{file} #{data.size} #{data.checksum}"})
+    .map{|file, data| "#{file} #{data.size} #{data.checksum}"},
+    skipIfEmpty: false)
 end
 
 def formatFileSize(size)
