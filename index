@@ -120,44 +120,37 @@ def verifyIndex(index, fast)
   end
 end
 
-def writeLog(index, logFile)
-  files = index.select{|file, data| data.status == IndexStatus::MISSING}
-  if !files.empty?
-    File.open(logFile + "-deleted", 'w') do |out|
-      files.each{|file, data| out.puts(file)}
-    end
-  end
-  files = index.select{|file, data| data.status == IndexStatus::INDEXED}
-  if !files.empty?
-    File.open(logFile + "-new", 'w') do |out|
-      files.each{|file, data| out.puts(file)}
-    end
-  end
-  files = index.select{|file, data| data.status == IndexStatus::RENAMED}
-  if !files.empty?
-    File.open(logFile + "-moved", 'w') do |out|
-      files.each{|file, data| out.puts("#{data.oldFile} to #{file}")}
-    end
-  end
-  files = index.select{|file, data| data.status == IndexStatus::ALTERED}
-  if !files.empty?
-    File.open(logFile + "-modified", 'w') do |out|
-      files.each{|file, data| out.puts("#{file} from #{data.oldChecksum} to #{data.checksum}")}
-    end
-  end
-  files = index.select{|file, data| data.status != IndexStatus::INDEXED}
-  File.open(logFile + "-backup", 'w') do |out|
-    files.each{|file, data| out.puts("#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}")}
+def writeOptionalFile(filename, lines)
+  if !lines.empty?
+    writeFile(filename, lines)
   end
 end
 
+def writeFile(filename, lines)
+  File.open(filename, 'w:UTF-8'){|out| out.puts(lines)}
+end
+
+def writeLog(index, logFile)
+  writeOptionalFile("#{logFile}-deleted",
+    index.select{|file, data| data.status == IndexStatus::MISSING}.keys)
+  writeOptionalFile("#{logFile}-new",
+    index.select{|file, data| data.status == IndexStatus::INDEXED}.keys)
+  writeOptionalFile("#{logFile}-moved",
+    index.select{|file, data| data.status == IndexStatus::RENAMED}
+    .map{|file, data| "#{data.oldFile} to #{file}"})
+  writeOptionalFile("#{logFile}-modified",
+    index.select{|file, data| data.status == IndexStatus::ALTERED}
+    .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
+  writeFile("#{logFile}-backup",
+    index.select{|file, data| data.status != IndexStatus::INDEXED}
+    .map{|file, data| "#{data.oldFile || file} #{data.oldLength || data.length} #{data.oldChecksum || data.checksum}"})
+end
+
 def writeIndex(index, file)
-  File.open(file, 'w:UTF-8') do |out|
-    index
-    .select{|file, data| data.status != IndexStatus::MISSING}
+  writeFile(file,
+    index.select{|file, data| data.status != IndexStatus::MISSING}
     .sort
-    .each{|file, data| out.puts("#{file} #{data.length} #{data.checksum}")}
-  end
+    .map{|file, data| "#{file} #{data.length} #{data.checksum}"})
 end
 
 def formatFileSize(size)
@@ -208,19 +201,15 @@ end
 
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
-  index = parseIndex(indexFile)
-  groups = index.group_by{|file, data| data.length + "-" + data.checksum}
-  duplicates = groups.select{|key, files| files.count > 1}
-  bytes = 0
-  count = 0
+  duplicates = parseIndex(indexFile)
+  .group_by{|file, data| data.length + "-" + data.checksum}
+  .select{|key, files| files.count > 1}
   duplicates.each do |key, files|
     STDERR.puts "Duplicates of #{files.first[0]}:"
-    files.drop(1).each do |file, data|
-      STDOUT.puts file
-      bytes += data.length.to_i
-      count += 1
-    end
+    STDOUT.puts(files.drop(1).map{|file, data| file})
   end
+  count = duplicates.sum{|key, files| files.length - 1};
+  bytes = duplicates.sum{|key, files| (files.length - 1) * files[0][1].length.to_i}
   if count > 0
     STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
   else
