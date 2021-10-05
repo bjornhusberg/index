@@ -188,7 +188,7 @@ end
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   duplicates = parseIndex(indexFile)
-  .group_by{|file, data| data.size + "-" + data.checksum}
+  .group_by{|file, data| "#{data.size}-#{data.checksum}"}
   .select{|key, files| files.count > 1}
   count = duplicates.sum{|key, files| files.length - 1}
   if count > 0
