@@ -146,12 +146,10 @@ end
 
 def formatFileSize(size)
   for prefix in ['', 'k', 'M', 'G', 'T']
-    if size > 1024 && prefix != 'T'
-      size = size / 1024
-    else
-      return "#{size}#{prefix}B"
-    end
+    break if size < 1024
+    size /= 1024
   end
+  "#{size}#{prefix}B"
 end
 
 def index(indexFile, fast, dry)
