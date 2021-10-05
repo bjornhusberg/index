@@ -132,8 +132,7 @@ def writeLog(index, logFile)
     .map{|file, data| "#{data.oldFile} to #{file}"})
   writeFile("#{logFile}-modified", filterIndex(index, IndexStatus::ALTERED)
     .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
-  writeFile("#{logFile}-backup",
-    index.select{|file, data| data.status != IndexStatus::INDEXED}
+  writeFile("#{logFile}-backup", index.select{|file, data| data.status != IndexStatus::INDEXED}
     .map{|file, data| "#{data.oldFile || file} #{data.oldSize || data.size} #{data.oldChecksum || data.checksum}"})
 end
 
