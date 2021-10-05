@@ -76,8 +76,7 @@ end
 
 def indexRenamedFiles(index)
   checksums = Hash.new
-  filterIndex(index, IndexStatus::INDEXED)
-  .each do |file, data|
+  filterIndex(index, IndexStatus::INDEXED).each do |file, data|
     files = checksums[data.checksum]
     if files == nil
       files = Array.new
@@ -85,8 +84,7 @@ def indexRenamedFiles(index)
     end
     files.push(file)
   end
-  filterIndex(index, IndexStatus::MISSING)
-  .each do |file, data|
+  filterIndex(index, IndexStatus::MISSING).each do |file, data|
     files = checksums[data.checksum]
     next if files == nil
     files.each do |otherfile|
@@ -104,8 +102,7 @@ def indexRenamedFiles(index)
 end
 
 def verifyIndex(index, fast)
-  filterIndex(index, IndexStatus::UNKNOWN)
-  .each do |file, data|
+  filterIndex(index, IndexStatus::UNKNOWN).each do |file, data|
     size = size(file)
     checksum = fast ? data.checksum : checksum(file)
     if size != data.size || checksum != data.checksum
