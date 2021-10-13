@@ -173,16 +173,20 @@ def index(indexFile, fast, dry)
   end
 end
 
+def hashkey(data)
+  "#{data.size}-#{data.checksum}"
+end
+
 def find(indexFile)
   STDERR.puts "Finding unindexed files"
-  keys = parseIndex(indexFile).map{|file, data| "#{data.size}-#{data.checksum}"}.to_set
+  keys = parseIndex(indexFile).map{|file, data| hashkey(data)}.to_set
   STDERR.puts "Remote index contains #{keys.length} files"
   localIndex = parseIndex("index.txt")
   STDERR.puts "Local index contains #{localIndex.length} files"
   STDERR.puts "Indexing current directory..."
   indexCurrentDirectory(localIndex)
   STDERR.puts "Local index now contains #{localIndex.length} files"
-  newFiles = localIndex.select{|file, data| !keys.include?("#{data.size}-#{data.checksum}")}
+  newFiles = localIndex.select{|file, data| !keys.include?(hashkey(data))}
   newFiles.each{|file, data| STDOUT.puts(file)}
   STDERR.puts "Found #{newFiles.count} unindexed files"
 end
@@ -190,15 +194,16 @@ end
 def dedup(indexFile)
   STDERR.puts "Finding duplicated files in the index"
   duplicates = parseIndex(indexFile)
-  .group_by{|file, data| "#{data.size}-#{data.checksum}"}
+  .group_by{|file, data| hashkey(data)}
   .select{|key, files| files.count > 1}
-  count = duplicates.sum{|key, files| files.length - 1}
-  if count > 0
-    duplicates.each do |key, files|
-      STDERR.puts "Duplicates of #{files.first[0]}:"
-      STDOUT.puts(files.drop(1).map{|file, data| file})
+  .map{|key, files| files.to_h}
+  if duplicates.length > 0
+    duplicates.each do |files|
+      STDERR.puts "Duplicates of #{files.keys.first} (#{files.values.first.size} bytes):"
+      STDOUT.puts(files.keys.drop(1))
     end
-    bytes = duplicates.sum{|key, files| (files.length - 1) * files.first[1].size.to_i}
+    count = duplicates.sum{|files| files.length - 1}
+    bytes = duplicates.sum{|files| (files.length - 1) * files.values.first.size.to_i}
     STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
   else
     STDERR.puts "No duplicate files found"
