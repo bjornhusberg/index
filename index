@@ -175,12 +175,14 @@ end
 
 def find(indexFile)
   STDERR.puts "Finding unindexed files"
-  index = parseIndex(indexFile)
-  STDERR.puts "Index contains #{index.length} files"
+  keys = parseIndex(indexFile).map{|file, data| "#{data.size}-#{data.checksum}"}.to_set
+  STDERR.puts "Remote index contains #{keys.length} files"
+  localIndex = parseIndex("index.txt")
+  STDERR.puts "Local index contains #{localIndex.length} files"
   STDERR.puts "Indexing current directory..."
-  newIndex = Hash.new
-  indexCurrentDirectory(newIndex)
-  newFiles = newIndex.select{|file, data| index.all?{ |indexFile, indexData| data.checksum != indexData.checksum || data.size != indexData.size }}
+  indexCurrentDirectory(localIndex)
+  STDERR.puts "Local index now contains #{localIndex.length} files"
+  newFiles = localIndex.select{|file, data| !keys.include?("#{data.size}-#{data.checksum}")}
   newFiles.each{|file, data| STDOUT.puts(file)}
   STDERR.puts "Found #{newFiles.count} unindexed files"
 end
