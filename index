@@ -179,13 +179,13 @@ end
 
 def find(indexFile)
   STDERR.puts "Finding unindexed files"
-  keys = parseIndex(indexFile).map{|file, data| hashkey(data)}.to_set
-  STDERR.puts "Remote index contains #{keys.length} files"
-  localIndex = parseIndex("index.txt")
-  STDERR.puts "Local index contains #{localIndex.length} files"
+  remoteIndex = parseIndex(indexFile)
+  keys = remoteIndex.map{|file, data| hashkey(data)}.to_set
+  STDERR.puts "Remote index contains #{remoteIndex.length} files"
+  localIndex = indexFile == "index.txt" ? Hash.new : parseIndex("index.txt")
   STDERR.puts "Indexing current directory..."
   indexCurrentDirectory(localIndex)
-  STDERR.puts "Local index now contains #{localIndex.length} files"
+  STDERR.puts "Local index contains #{localIndex.length} files"
   newFiles = localIndex.select{|file, data| !keys.include?(hashkey(data))}
   newFiles.each{|file, data| STDOUT.puts(file)}
   STDERR.puts "Found #{newFiles.count} unindexed files"
@@ -197,18 +197,17 @@ def dedup(indexFile)
   .group_by{|file, data| hashkey(data)}
   .select{|key, files| files.count > 1}
   .map{|key, files| files.to_h}
-  if duplicates.length > 0
-    duplicates.each do |files|
-      STDERR.puts "Duplicates of #{files.keys.first} (#{files.values.first.size} bytes):"
-      STDOUT.puts(files.keys.drop(1))
-    end
-    count = duplicates.sum{|files| files.length - 1}
-    bytes = duplicates.sum{|files| (files.length - 1) * files.values.first.size.to_i}
-    STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
-  else
+  if duplicates.empty?
     STDERR.puts "No duplicate files found"
+    return
   end
-  STDERR.puts "Done."
+  duplicates.each do |files|
+    STDERR.puts "Duplicates of #{files.keys.first} (#{files.values.first.size} bytes):"
+    STDOUT.puts(files.keys.drop(1))
+  end
+  count = duplicates.sum{|files| files.length - 1}
+  bytes = duplicates.sum{|files| (files.length - 1) * files.values.first.size.to_i}
+  STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
 end
 
 fast = ARGV.delete('fast')
