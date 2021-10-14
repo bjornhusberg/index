@@ -20,6 +20,8 @@ class FileData
   end
 end
 
+$default_index_filename = "index.txt"
+
 def checksum(file)
   Digest::MD5.file(file).to_s
 end
@@ -182,7 +184,7 @@ def find(indexFile)
   remoteIndex = parseIndex(indexFile)
   keys = remoteIndex.map{|file, data| hashkey(data)}.to_set
   STDERR.puts "Remote index contains #{remoteIndex.length} files"
-  localIndex = indexFile == "index.txt" ? Hash.new : parseIndex("index.txt")
+  localIndex = indexFile == $default_index_filename ? Hash.new : parseIndex($default_index_filename)
   STDERR.puts "Indexing current directory..."
   indexCurrentDirectory(localIndex)
   STDERR.puts "Local index contains #{localIndex.length} files"
@@ -223,7 +225,7 @@ elsif ARGV.any? && !File.exists?(ARGV.first)
   return
 end
 
-indexFile = ARGV.first || "index.txt"
+indexFile = ARGV.first || $default_index_filename
 
 if dedup
   dedup(indexFile)
