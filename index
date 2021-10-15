@@ -20,6 +20,30 @@ class FileData
   end
 end
 
+class Progress
+  def initialize(total, description)
+    @total = total
+    @progress = 0
+    @nextUpdate = Time.now+5
+    @description = description
+  end
+
+  def inc()
+    update(@progress + 1)
+  end
+
+  def update(progress)
+    @progress = progress
+    return if @nextUpdate > Time.now
+    if @description
+      STDERR.puts @description
+    end
+    @description = nil
+    STDERR.print("\r#{@progress}/#{@total}")
+    @nextUpdate = Time.now + 1
+  end
+end
+
 $default_index_filename = "index.txt"
 
 def checksum(file)
@@ -65,9 +89,12 @@ def findFiles(directory)
 end
 
 def indexCurrentDirectory(index)
-  findFiles(".")
-  .select{|file| index[file] == nil}
-  .each{|file| index[file] = FileData.new(size(file), checksum(file), IndexStatus::INDEXED)}
+  files = findFiles(".").select{|file| index[file] == nil}
+  progress = Progress.new(files.length, "Indexing current directory...")
+  files.each do |file|
+    progress.inc
+    index[file] = FileData.new(size(file), checksum(file), IndexStatus::INDEXED)
+  end
 end
 
 def indexMissingFiles(index)
@@ -104,7 +131,10 @@ def indexRenamedFiles(index)
 end
 
 def verifyIndex(index, fast)
-  filterIndex(index, IndexStatus::UNKNOWN).each do |file, data|
+  unknown = filterIndex(index, IndexStatus::UNKNOWN)
+  progress = Progress.new(unknown.length, "Verifying index...")
+  unknown.each do |file, data|
+    progress.inc
     size = size(file)
     checksum = fast ? data.checksum : checksum(file)
     if size != data.size || checksum != data.checksum
@@ -118,6 +148,7 @@ def verifyIndex(index, fast)
       data.status = IndexStatus::CHECKED
     end
   end
+  STDERR.puts("")
 end
 
 def writeFile(filename, lines, skipIfEmpty=true)
@@ -185,7 +216,6 @@ def find(indexFile)
   keys = remoteIndex.map{|file, data| hashkey(data)}.to_set
   STDERR.puts "Remote index contains #{remoteIndex.length} files"
   localIndex = indexFile == $default_index_filename ? Hash.new : parseIndex($default_index_filename)
-  STDERR.puts "Indexing current directory..."
   indexCurrentDirectory(localIndex)
   STDERR.puts "Local index contains #{localIndex.length} files"
   newFiles = localIndex.select{|file, data| !keys.include?(hashkey(data))}
