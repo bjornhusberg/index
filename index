@@ -13,8 +13,10 @@ module IndexStatus
   DELETED = 6 # Marked for removal from index
 end
 
+$DEFAULT_INDEX_FILENAME = "index.txt"
+
 class FileData
-  attr_accessor :size, :checksum, :status, :oldSize, :oldChecksum, :oldFile
+  attr_accessor :size, :checksum, :status, :old_size, :old_checksum, :old_file
   def initialize(*args)
     @size, @checksum, @status = *args
   end
@@ -24,7 +26,7 @@ class Progress
   def initialize(total, description)
     @total = total
     @progress = 0
-    @nextUpdate = Time.now+5
+    @next_update = Time.now+5
     @description = description
   end
 
@@ -34,17 +36,20 @@ class Progress
 
   def update(progress)
     @progress = progress
-    return if @nextUpdate > Time.now
+    return if @next_update > Time.now
     if @description
       STDERR.puts @description
     end
     @description = nil
     STDERR.print("\r#{@progress}/#{@total}")
-    @nextUpdate = Time.now + 1
+    @missing_new_line = true
+    @next_update = Time.now + 1
+  end
+
+  def close()
+    puts if @missing_new_line
   end
 end
-
-$default_index_filename = "index.txt"
 
 def checksum(file)
   Digest::MD5.file(file).to_s
@@ -54,7 +59,7 @@ def size(file)
   File.size(file).to_s
 end
 
-def parseIndex(file)
+def parse_index(file)
   index = Hash.new
   if File.exists? file
     File.open(file, "r:UTF-8").each do |line|
@@ -68,11 +73,11 @@ def parseIndex(file)
   index
 end
 
-def filterIndex(index, status)
+def filter_index(index, status)
   index.select{|file, data| data.status == status}
 end
 
-def findFiles(directory)
+def find_files(directory)
   files = Array.new
   Dir.foreach(directory)
   .select{|filename| !filename.match(/^\.$/) && !filename.match(/^\..*/) && !filename.match(/^index\.txt.*/)}
@@ -80,7 +85,7 @@ def findFiles(directory)
     filename = filename.encode!('UTF-8','UTF8-MAC')
     file = File.join(directory, filename)
     if File.directory?(file)
-      files = files.concat(findFiles(file))
+      files = files.concat(find_files(file))
     else
       files.push(file)
     end
@@ -88,24 +93,25 @@ def findFiles(directory)
   files
 end
 
-def indexCurrentDirectory(index)
-  files = findFiles(".").select{|file| index[file] == nil}
+def index_current_directory(index)
+  files = find_files(".").select{|file| index[file] == nil}
   progress = Progress.new(files.length, "Indexing current directory...")
   files.each do |file|
     progress.inc
     index[file] = FileData.new(size(file), checksum(file), IndexStatus::INDEXED)
   end
+  progress.close
 end
 
-def indexMissingFiles(index)
+def index_missing_files(index)
   index
   .select{|file, data| data.status == IndexStatus::UNKNOWN && !File.exists?(file)}
   .each{|file, data| data.status = IndexStatus::MISSING}
 end
 
-def indexRenamedFiles(index)
+def index_renamed_files(index)
   checksums = Hash.new
-  filterIndex(index, IndexStatus::INDEXED).each do |file, data|
+  filter_index(index, IndexStatus::INDEXED).each do |file, data|
     files = checksums[data.checksum]
     if files == nil
       files = Array.new
@@ -113,7 +119,7 @@ def indexRenamedFiles(index)
     end
     files.push(file)
   end
-  filterIndex(index, IndexStatus::MISSING).each do |file, data|
+  filter_index(index, IndexStatus::MISSING).each do |file, data|
     files = checksums[data.checksum]
     next if files == nil
     files.each do |otherfile|
@@ -123,15 +129,15 @@ def indexRenamedFiles(index)
       STDERR.puts "Moved #{file} to #{otherfile}"
       data.status = IndexStatus::DELETED
       otherdata.status = IndexStatus::RENAMED
-      otherdata.oldFile = file
+      otherdata.old_file = file
       break
     end
   end
   index.delete_if{|file, data| data.status == IndexStatus::DELETED}
 end
 
-def verifyIndex(index, fast)
-  unknown = filterIndex(index, IndexStatus::UNKNOWN)
+def verify_index(index, fast)
+  unknown = filter_index(index, IndexStatus::UNKNOWN)
   progress = Progress.new(unknown.length, "Verifying index...")
   unknown.each do |file, data|
     progress.inc
@@ -140,41 +146,41 @@ def verifyIndex(index, fast)
     if size != data.size || checksum != data.checksum
       checksum = fast ? checksum(file) : checksum
       data.status = IndexStatus::ALTERED
-      data.oldSize = data.size
-      data.oldChecksum = data.checksum
+      data.old_size = data.size
+      data.old_checksum = data.checksum
       data.size = size
       data.checksum = checksum
     else
       data.status = IndexStatus::CHECKED
     end
   end
-  STDERR.puts("")
+  progress.close
 end
 
-def writeFile(filename, lines, skipIfEmpty=true)
-  File.open(filename, 'w:UTF-8'){|out| out.puts(lines)} if !skipIfEmpty || !lines.empty?
+def write_file(filename, lines, skip_if_empty=true)
+  File.open(filename, 'w:UTF-8'){|out| out.puts(lines)} if !skip_if_empty || !lines.empty?
 end
 
-def writeLog(index, logFile)
-  writeFile("#{logFile}-deleted", filterIndex(index, IndexStatus::MISSING).keys)
-  writeFile("#{logFile}-new", filterIndex(index, IndexStatus::INDEXED).keys)
-  writeFile("#{logFile}-moved", filterIndex(index, IndexStatus::RENAMED)
-    .map{|file, data| "#{data.oldFile} to #{file}"})
-  writeFile("#{logFile}-modified", filterIndex(index, IndexStatus::ALTERED)
-    .map{|file, data| "#{file} from #{data.oldChecksum} to #{data.checksum}"})
-  writeFile("#{logFile}-backup", index.select{|file, data| data.status != IndexStatus::INDEXED}
-    .map{|file, data| "#{data.oldFile || file} #{data.oldSize || data.size} #{data.oldChecksum || data.checksum}"})
+def write_log(index, log_file)
+  write_file("#{log_file}-deleted", filter_index(index, IndexStatus::MISSING).keys)
+  write_file("#{log_file}-new", filter_index(index, IndexStatus::INDEXED).keys)
+  write_file("#{log_file}-moved", filter_index(index, IndexStatus::RENAMED)
+    .map{|file, data| "#{data.old_file} to #{file}"})
+  write_file("#{log_file}-modified", filter_index(index, IndexStatus::ALTERED)
+    .map{|file, data| "#{file} from #{data.old_checksum} to #{data.checksum}"})
+  write_file("#{log_file}-backup", index.select{|file, data| data.status != IndexStatus::INDEXED}
+    .map{|file, data| "#{data.old_file || file} #{data.old_size || data.size} #{data.old_checksum || data.checksum}"})
 end
 
-def writeIndex(index, file)
-  writeFile(file,
+def write_index(index, file)
+  write_file(file,
     index.select{|file, data| data.status != IndexStatus::MISSING}
     .sort
     .map{|file, data| "#{file} #{data.size} #{data.checksum}"},
-    skipIfEmpty: false)
+    skip_if_empty: false)
 end
 
-def formatFileSize(size)
+def format_file_size(size)
   for prefix in ['', 'k', 'M', 'G', 'T']
     break if size < 1024
     size /= 1024
@@ -182,23 +188,23 @@ def formatFileSize(size)
   "#{size}#{prefix}B"
 end
 
-def index(indexFile, fast, dry)
-  index = parseIndex(indexFile)
+def index(index_file, fast, dry)
+  index = parse_index(index_file)
   STDERR.puts "Index contains #{index.length} files"
   STDERR.puts "Running #{fast ? 'file size' : 'full'} index verification..."
-  indexCurrentDirectory(index)
-  indexMissingFiles(index)
-  indexRenamedFiles(index)
-  verifyIndex(index, fast)
+  index_current_directory(index)
+  index_missing_files(index)
+  index_renamed_files(index)
+  verify_index(index, fast)
   if index.any?{|file, data| data.status != IndexStatus::CHECKED}
     STDERR.puts "Update summary:"
-    STDERR.puts "#{filterIndex(index, IndexStatus::INDEXED).count} new files"
-    STDERR.puts "#{filterIndex(index, IndexStatus::RENAMED).count} renamed files"
-    STDERR.puts "#{filterIndex(index, IndexStatus::MISSING).count} missing files"
-    STDERR.puts "#{filterIndex(index, IndexStatus::ALTERED).count} altered files"
+    STDERR.puts "#{filter_index(index, IndexStatus::INDEXED).count} new files"
+    STDERR.puts "#{filter_index(index, IndexStatus::RENAMED).count} renamed files"
+    STDERR.puts "#{filter_index(index, IndexStatus::MISSING).count} missing files"
+    STDERR.puts "#{filter_index(index, IndexStatus::ALTERED).count} altered files"
     if !dry
-      writeLog(index, indexFile + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
-      writeIndex(index, indexFile)
+      write_log(index, index_file + "." + Time.now.strftime("%Y%m%d_%H%M%S"))
+      write_index(index, index_file)
       STDERR.puts "Index updated"
     end
   else
@@ -210,22 +216,22 @@ def hashkey(data)
   "#{data.size}-#{data.checksum}"
 end
 
-def find(indexFile)
+def find(index_file)
   STDERR.puts "Finding unindexed files"
-  remoteIndex = parseIndex(indexFile)
-  keys = remoteIndex.map{|file, data| hashkey(data)}.to_set
-  STDERR.puts "Remote index contains #{remoteIndex.length} files"
-  localIndex = indexFile == $default_index_filename ? Hash.new : parseIndex($default_index_filename)
-  indexCurrentDirectory(localIndex)
-  STDERR.puts "Local index contains #{localIndex.length} files"
-  newFiles = localIndex.select{|file, data| !keys.include?(hashkey(data))}
-  newFiles.each{|file, data| STDOUT.puts(file)}
-  STDERR.puts "Found #{newFiles.count} unindexed files"
+  remote_index = parse_index(index_file)
+  keys = remote_index.map{|file, data| hashkey(data)}.to_set
+  STDERR.puts "Remote index contains #{remote_index.length} files"
+  local_index = index_file == $DEFAULT_INDEX_FILENAME ? Hash.new : parse_index($DEFAULT_INDEX_FILENAME)
+  index_current_directory(local_index)
+  STDERR.puts "Local index contains #{local_index.length} files"
+  new_files = local_index.select{|file, data| !keys.include?(hashkey(data))}
+  new_files.each{|file, data| STDOUT.puts(file)}
+  STDERR.puts "Found #{new_files.count} unindexed files"
 end
 
-def dedup(indexFile)
+def dedup(index_file)
   STDERR.puts "Finding duplicated files in the index"
-  duplicates = parseIndex(indexFile)
+  duplicates = parse_index(index_file)
   .group_by{|file, data| hashkey(data)}
   .select{|key, files| files.count > 1}
   .map{|key, files| files.to_h}
@@ -239,7 +245,7 @@ def dedup(indexFile)
   end
   count = duplicates.sum{|files| files.length - 1}
   bytes = duplicates.sum{|files| (files.length - 1) * files.values.first.size.to_i}
-  STDERR.puts "Deduplication of #{count} files would save #{formatFileSize bytes}."
+  STDERR.puts "Deduplication of #{count} files would save #{format_file_size bytes}."
 end
 
 fast = ARGV.delete('fast')
@@ -255,12 +261,12 @@ elsif ARGV.any? && !File.exists?(ARGV.first)
   return
 end
 
-indexFile = ARGV.first || $default_index_filename
+index_file = ARGV.first || $DEFAULT_INDEX_FILENAME
 
 if dedup
-  dedup(indexFile)
+  dedup(index_file)
 elsif find
-  find(indexFile)
+  find(index_file)
 else
-  index(indexFile, fast, dry)
+  index(index_file, fast, dry)
 end
